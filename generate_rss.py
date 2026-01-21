@@ -63,10 +63,10 @@ def scrape_firstshowing_schedule(year, target_date):
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # Find the date section for the target Friday
-        date_str = target_date.strftime('%B %d').replace(' 0', ' ')  # "January 23"
+        date_str = target_date.strftime('%B %d (Friday)').replace(' 0', ' ')  # "January 23 (Friday)"
         movies = []
         
-        # Find all text content
+        # Get all text content
         page_text = soup.get_text()
         
         # Look for the date section
@@ -74,37 +74,45 @@ def scrape_firstshowing_schedule(year, target_date):
             # Split by the date to find movies listed after it
             parts = page_text.split(date_str)
             if len(parts) > 1:
-                # Get the section after the date
-                section = parts[1].split('\n')
+                # Get the section after the date, but stop at the next date header
+                section = parts[1]
                 
-                # Extract movie titles (they're usually on their own lines)
-                for line in section[:30]:  # Check first 30 lines after date
+                # Stop at the next date (look for patterns like "January 25" or "January 30")
+                for stop_pattern in ['\nJanuary ', '\nFebruary ', '\nMarch ', '\nApril ', '\nMay ', '\nJune ', 
+                                     '\nJuly ', '\nAugust ', '\nSeptember ', '\nOctober ', '\nNovember ', '\nDecember ']:
+                    if stop_pattern in section:
+                        section = section.split(stop_pattern)[0]
+                        break
+                
+                # Split into lines
+                lines = section.split('\n')
+                
+                # Extract movie titles with their tags
+                for line in lines:
                     line = line.strip()
-                    # Skip empty lines, dates, and common non-movie text
-                    if (line and 
-                        len(line) > 2 and 
-                        not line.startswith('(') and
-                        'Friday' not in line and
-                        'Theaters' not in line and
-                        'IMAX' not in line and
-                        'Expands' not in line and
-                        'HBO' not in line and
-                        'Netflix' not in line and
-                        'Amazon' not in line):
-                        # Clean up the title
-                        title = line.split('(')[0].strip()  # Remove anything in parentheses
-                        if title and len(title) > 2:
-                            movies.append(title)
+                    
+                    # Skip empty lines and non-movie entries
+                    if not line or len(line) < 2:
+                        continue
+                    
+                    # Keep the full title with tags like (Expands), (+ IMAX), etc.
+                    # But remove platform-only tags like (Theaters), (Netflix), etc.
+                    title = line
+                    
+                    # Remove platform-only suffixes but keep descriptive ones
+                    for suffix in [' (Theaters)', ' (Netflix)', ' (HBO Max)', 
+                                   ' (Prime Video)', ' (Hulu)', ' (VOD)', ' (Theaters + VOD)', 
+                                   ' (Re-Release)', ' (Fathom)']:
+                        if suffix in title:
+                            title = title.replace(suffix, '')
+                    
+                    # Only add if it looks like a valid movie title
+                    if title and len(title) > 1 and not title[0].isdigit():
+                        movies.append(title)
         
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_movies = []
-        for movie in movies:
-            if movie not in seen:
-                seen.add(movie)
-                unique_movies.append(movie)
+        print(f"Found {len(movies)} movies for {date_str}: {movies}")
+        return movies
         
-        return unique_movies[:15]  # Return up to 15 movies
     except Exception as e:
         print(f"Error scraping FirstShowing: {e}")
         return []
@@ -119,7 +127,7 @@ def format_runtime(minutes):
         return f"{hours}h {mins}m"
     return f"{mins}m"
 
-def create_movie_description(movie_data):
+def create_movie_description(movie_data, release_date):
     """Create HTML description for RSS item"""
     poster = movie_data.get('poster_path')
     poster_url = f"{TMDB_IMAGE_BASE}{poster}" if poster else ""
@@ -142,6 +150,8 @@ def create_movie_description(movie_data):
     
     # Build badges HTML only for known values
     badges_html = ""
+    # Always show release date
+    badges_html += f"<div style='display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px; font-size: 14px;'><strong>Release:</strong> {release_date}</div>"
     if certification:
         badges_html += f"<div style='display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px; font-size: 14px;'><strong>Rating:</strong> {certification}</div>"
     if runtime:
@@ -183,16 +193,27 @@ def generate_rss():
     SubElement(channel, 'lastBuildDate').text = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
     
     # Fetch details for each movie
-    for title in movie_titles:
-        print(f"Fetching details for: {title}")
-        movie_data = search_movie_tmdb(title, year)
+    for title_with_tags in movie_titles:
+        # Extract clean title for TMDB search (remove tags like "(Expands)", "(+ IMAX)")
+        clean_title = title_with_tags.split('(')[0].strip() if '(' in title_with_tags else title_with_tags
+        
+        print(f"Fetching details for: {clean_title}")
+        movie_data = search_movie_tmdb(clean_title, year)
         
         if movie_data:
             item = SubElement(channel, 'item')
-            movie_title = movie_data.get('title', title)
-            SubElement(item, 'title').text = f"{movie_title} - Releases {date_str}"
+            movie_title = movie_data.get('title', clean_title)
+            
+            # Add back the tags to the title if they exist
+            if '(' in title_with_tags:
+                tags = title_with_tags[title_with_tags.index('('):]
+                display_title = f"{movie_title} {tags}"
+            else:
+                display_title = movie_title
+            
+            SubElement(item, 'title').text = display_title
             SubElement(item, 'link').text = f"https://www.themoviedb.org/movie/{movie_data['id']}"
-            SubElement(item, 'description').text = create_movie_description(movie_data)
+            SubElement(item, 'description').text = create_movie_description(movie_data, date_str)
             SubElement(item, 'pubDate').text = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
             SubElement(item, 'guid').text = f"firstshowing-{movie_data['id']}-{next_friday.strftime('%Y%m%d')}"
             
