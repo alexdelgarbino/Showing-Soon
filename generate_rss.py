@@ -194,7 +194,9 @@ def generate_rss():
     SubElement(channel, 'lastBuildDate').text = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
     
     # Fetch details for each movie
-    for title_with_tags in movie_titles:
+    # Use decreasing timestamps so first movie appears newest in RSS readers
+    base_time = datetime.now()
+    for index, title_with_tags in enumerate(movie_titles):
         # Extract clean title for TMDB search (remove tags like "(Expands)", "(+ IMAX)")
         clean_title = title_with_tags.split('(')[0].strip() if '(' in title_with_tags else title_with_tags
         
@@ -215,14 +217,12 @@ def generate_rss():
             SubElement(item, 'title').text = display_title
             SubElement(item, 'link').text = f"https://www.themoviedb.org/movie/{movie_data['id']}"
             SubElement(item, 'description').text = create_movie_description(movie_data, date_str)
-            SubElement(item, 'pubDate').text = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
-            SubElement(item, 'guid').text = f"firstshowing-{movie_data['id']}-{next_friday.strftime('%Y%m%d')}"
             
-            # Add backdrop as enclosure
-            backdrop = movie_data.get('backdrop_path')
-            if backdrop:
-                backdrop_url = f"{TMDB_IMAGE_BASE}{backdrop}"
-                SubElement(item, 'enclosure', url=backdrop_url, type='image/jpeg')
+            # Assign decreasing timestamps: first movie gets newest time, last gets oldest
+            # This ensures RSS readers show them in FirstShowing order (newest first)
+            item_time = base_time - timedelta(minutes=index)
+            SubElement(item, 'pubDate').text = item_time.strftime('%a, %d %b %Y %H:%M:%S GMT')
+            SubElement(item, 'guid').text = f"firstshowing-{movie_data['id']}-{next_friday.strftime('%Y%m%d')}"
     
     # Pretty print XML
     xml_str = minidom.parseString(tostring(rss)).toprettyxml(indent='  ')
