@@ -1,1 +1,7 @@
 .kiro/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+Report.pdf
+run_rss_generator.bat
