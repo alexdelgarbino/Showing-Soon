@@ -129,8 +129,9 @@ def format_runtime(minutes):
 
 def create_movie_description(movie_data, release_date):
     """Create HTML description for RSS item"""
-    poster = movie_data.get('poster_path')
-    poster_url = f"{TMDB_IMAGE_BASE}{poster}" if poster else ""
+    # Use backdrop image instead of poster
+    backdrop = movie_data.get('backdrop_path')
+    backdrop_url = f"{TMDB_IMAGE_BASE}{backdrop}" if backdrop else ""
     
     overview = html.escape(movie_data.get('overview', 'No synopsis available.'))
     runtime_minutes = movie_data.get('runtime')
@@ -161,7 +162,7 @@ def create_movie_description(movie_data, release_date):
     
     description = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 700px; line-height: 1.6; color: #333;">
-        {"<div style='margin-bottom: 20px;'><img src='" + poster_url + "' alt='Movie Poster' style='max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);' /></div>" if poster_url else ""}
+        {"<div style='margin-bottom: 20px;'><img src='" + backdrop_url + "' alt='Movie Backdrop' style='max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);' /></div>" if backdrop_url else ""}
         {f"<div style='margin-bottom: 24px;'>{badges_html}</div>" if badges_html else ""}
         <div style="margin-top: 24px; font-size: 15px; line-height: 1.7;">
             {overview}
@@ -217,11 +218,11 @@ def generate_rss():
             SubElement(item, 'pubDate').text = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
             SubElement(item, 'guid').text = f"firstshowing-{movie_data['id']}-{next_friday.strftime('%Y%m%d')}"
             
-            # Add poster as enclosure
-            poster = movie_data.get('poster_path')
-            if poster:
-                poster_url = f"{TMDB_IMAGE_BASE}{poster}"
-                SubElement(item, 'enclosure', url=poster_url, type='image/jpeg')
+            # Add backdrop as enclosure
+            backdrop = movie_data.get('backdrop_path')
+            if backdrop:
+                backdrop_url = f"{TMDB_IMAGE_BASE}{backdrop}"
+                SubElement(item, 'enclosure', url=backdrop_url, type='image/jpeg')
     
     # Pretty print XML
     xml_str = minidom.parseString(tostring(rss)).toprettyxml(indent='  ')
