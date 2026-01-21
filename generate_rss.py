@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""
+Generate RSS feed for FirstShowing schedule with TMDB movie details
+Posts every Monday at 9am for the upcoming Friday
+"""
+from datetime import datetime, timedelta
+from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.dom import minidom
+import requests
+from bs4 import BeautifulSoup
+import html
+
+TMDB_API_KEY = 'b5d2f69cf0491ce4441c4d04c4befc3d'
+TMDB_BASE_URL = 'https://api.themoviedb.org/3'
+TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
+
+def get_next_friday():
+    """Get the date of the upcoming Friday"""
+    today = datetime.now()
+    days_ahead = 4 - today.weekday()  # Friday is 4
+    if days_ahead <= 0:  # Target day already happened this week
+        days_ahead += 7
+    return today + timedelta(days_ahead)
+
+def search_movie_tmdb(title, year):
+    """Search for a movie on TMDB and return details"""
+    try:
+        search_url = f'{TMDB_BASE_URL}/search/movie'
+        params = {
+            'api_key': TMDB_API_KEY,
+            'query': title,
+            'year': year
+        }
+        response = requests.get(search_url, params=params, timeout=10)
+        response.raise_for_status()
+        results = response.json().get('results', [])
+        
+        if not results:
+            # Try without year
+            params.pop('year')
+            response = requests.get(search_url, params=params, timeout=10)
+            response.raise_for_status()
+            results = response.json().get('results', [])
+        
+        if results:
+            movie_id = results[0]['id']
+            # Get full movie details
+            details_url = f'{TMDB_BASE_URL}/movie/{movie_id}'
+            params = {'api_key': TMDB_API_KEY}
+            response = requests.get(details_url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+    except Exception as e:
+        print(f"Error fetching TMDB data for '{title}': {e}")
+    return None
+
+def scrape_firstshowing_schedule(year, target_date):
+    """Scrape movie titles from FirstShowing schedule page"""
+    try:
+        url = f'https://www.firstshowing.net/schedule{year}/'
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Find the date section for the target Friday
+        date_str = target_date.strftime('%B %d').replace(' 0', ' ')  # Remove leading zero
+        movies = []
+        
+        # Look for movie titles - adjust selectors based on actual page structure
+        # This is a generic approach; may need adjustment
+        for link in soup.find_all('a'):
+            text = link.get_text(strip=True)
+            if text and len(text) > 3 and not text.startswith('http'):
+                movies.append(text)
+        
+        return movies[:10]  # Return first 10 potential matches
+    except Exception as e:
+        print(f"Error scraping FirstShowing: {e}")
+        return []
+
+def format_runtime(minutes):
+    """Convert runtime in minutes to readable format"""
+    if not minutes:
+        return "Runtime unknown"
+    hours = minutes // 60
+    mins = minutes % 60
+    if hours > 0:
+        return f"{hours}h {mins}m"
+    return f"{mins}m"
+
+def create_movie_description(movie_data):
+    """Create HTML description for RSS item"""
+    poster = movie_data.get('poster_path')
+    poster_url = f"{TMDB_IMAGE_BASE}{poster}" if poster else ""
+    
+    overview = html.escape(movie_data.get('overview', 'No synopsis available.'))
+    runtime = format_runtime(movie_data.get('runtime'))
+    rating = movie_data.get('vote_average', 0)
+    
+    # Get certification (rating like PG-13, R, etc.)
+    certification = "Not Rated"
+    release_dates = movie_data.get('release_dates', {}).get('results', [])
+    for country in release_dates:
+        if country.get('iso_3166_1') == 'US':
+            certs = country.get('release_dates', [])
+            if certs:
+                certification = certs[0].get('certification', 'Not Rated')
+                break
+    
+    genres = ', '.join([g['name'] for g in movie_data.get('genres', [])])
+    
+    description = f"""
+    <div style="font-family: Arial, sans-serif;">
+        {"<img src='" + poster_url + "' style='max-width: 300px; float: left; margin-right: 20px;' />" if poster_url else ""}
+        <p><strong>Rating:</strong> {certification}</p>
+        <p><strong>Runtime:</strong> {runtime}</p>
+        <p><strong>TMDB Score:</strong> {rating}/10</p>
+        <p><strong>Genres:</strong> {genres if genres else 'N/A'}</p>
+        <p><strong>Synopsis:</strong></p>
+        <p>{overview}</p>
+        <div style="clear: both;"></div>
+    </div>
+    """
+    return description.strip()
+
+def generate_rss():
+    """Generate RSS feed with upcoming Friday's schedule and movie details"""
+    next_friday = get_next_friday()
+    year = next_friday.year
+    date_str = next_friday.strftime("%B %d, %Y")
+    
+    print(f"Generating RSS feed for {date_str}")
+    print(f"Scraping FirstShowing schedule...")
+    
+    # Get movie titles from FirstShowing
+    movie_titles = scrape_firstshowing_schedule(year, next_friday)
+    
+    # Create RSS structure
+    rss = Element('rss', version='2.0')
+    channel = SubElement(rss, 'channel')
+    
+    SubElement(channel, 'title').text = 'FirstShowing Weekly Movie Releases'
+    SubElement(channel, 'link').text = f'https://www.firstshowing.net/schedule{year}/'
+    SubElement(channel, 'description').text = f'Detailed movie releases for {date_str}'
+    SubElement(channel, 'language').text = 'en-us'
+    SubElement(channel, 'lastBuildDate').text = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
+    
+    # Fetch details for each movie
+    for title in movie_titles:
+        print(f"Fetching details for: {title}")
+        movie_data = search_movie_tmdb(title, year)
+        
+        if movie_data:
+            item = SubElement(channel, 'item')
+            movie_title = movie_data.get('title', title)
+            SubElement(item, 'title').text = f"{movie_title} - Releases {date_str}"
+            SubElement(item, 'link').text = f"https://www.themoviedb.org/movie/{movie_data['id']}"
+            SubElement(item, 'description').text = create_movie_description(movie_data)
+            SubElement(item, 'pubDate').text = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
+            SubElement(item, 'guid').text = f"firstshowing-{movie_data['id']}-{next_friday.strftime('%Y%m%d')}"
+            
+            # Add poster as enclosure
+            poster = movie_data.get('poster_path')
+            if poster:
+                poster_url = f"{TMDB_IMAGE_BASE}{poster}"
+                SubElement(item, 'enclosure', url=poster_url, type='image/jpeg')
+    
+    # Pretty print XML
+    xml_str = minidom.parseString(tostring(rss)).toprettyxml(indent='  ')
+    
+    # Write to file
+    with open('feed.xml', 'w', encoding='utf-8') as f:
+        f.write(xml_str)
+    
+    print(f"\nRSS feed generated successfully!")
+    print(f"Found {len(movie_titles)} movies for {date_str}")
+    print(f"Output: feed.xml")
+
+if __name__ == '__main__':
+    generate_rss()
