@@ -126,7 +126,6 @@ def create_movie_description(movie_data):
     
     overview = html.escape(movie_data.get('overview', 'No synopsis available.'))
     runtime = format_runtime(movie_data.get('runtime'))
-    rating = movie_data.get('vote_average', 0)
     
     # Get certification (rating like PG-13, R, etc.)
     certification = "Not Rated"
@@ -141,15 +140,20 @@ def create_movie_description(movie_data):
     genres = ', '.join([g['name'] for g in movie_data.get('genres', [])])
     
     description = f"""
-    <div style="font-family: Arial, sans-serif;">
-        {"<img src='" + poster_url + "' style='max-width: 300px; float: left; margin-right: 20px;' />" if poster_url else ""}
-        <p><strong>Rating:</strong> {certification}</p>
-        <p><strong>Runtime:</strong> {runtime}</p>
-        <p><strong>TMDB Score:</strong> {rating}/10</p>
-        <p><strong>Genres:</strong> {genres if genres else 'N/A'}</p>
-        <p><strong>Synopsis:</strong></p>
-        <p>{overview}</p>
-        <div style="clear: both;"></div>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 700px; line-height: 1.6; color: #333;">
+        {"<div style='margin-bottom: 20px;'><img src='" + poster_url + "' alt='Movie Poster' style='max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);' /></div>" if poster_url else ""}
+        <div style="margin-bottom: 20px;">
+            <div style="display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px; font-size: 14px;">
+                <strong>Rating:</strong> {certification}
+            </div>
+            <div style="display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px; font-size: 14px;">
+                <strong>Runtime:</strong> {runtime}
+            </div>
+            {f"<div style='display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-bottom: 8px; font-size: 14px;'><strong>Genre:</strong> {genres}</div>" if genres else ""}
+        </div>
+        <div style="margin-top: 16px; font-size: 15px; line-height: 1.7;">
+            {overview}
+        </div>
     </div>
     """
     return description.strip()
