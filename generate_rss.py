@@ -63,17 +63,48 @@ def scrape_firstshowing_schedule(year, target_date):
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # Find the date section for the target Friday
-        date_str = target_date.strftime('%B %d').replace(' 0', ' ')  # Remove leading zero
+        date_str = target_date.strftime('%B %d').replace(' 0', ' ')  # "January 23"
         movies = []
         
-        # Look for movie titles - adjust selectors based on actual page structure
-        # This is a generic approach; may need adjustment
-        for link in soup.find_all('a'):
-            text = link.get_text(strip=True)
-            if text and len(text) > 3 and not text.startswith('http'):
-                movies.append(text)
+        # Find all text content
+        page_text = soup.get_text()
         
-        return movies[:10]  # Return first 10 potential matches
+        # Look for the date section
+        if date_str in page_text:
+            # Split by the date to find movies listed after it
+            parts = page_text.split(date_str)
+            if len(parts) > 1:
+                # Get the section after the date
+                section = parts[1].split('\n')
+                
+                # Extract movie titles (they're usually on their own lines)
+                for line in section[:30]:  # Check first 30 lines after date
+                    line = line.strip()
+                    # Skip empty lines, dates, and common non-movie text
+                    if (line and 
+                        len(line) > 2 and 
+                        not line.startswith('(') and
+                        'Friday' not in line and
+                        'Theaters' not in line and
+                        'IMAX' not in line and
+                        'Expands' not in line and
+                        'HBO' not in line and
+                        'Netflix' not in line and
+                        'Amazon' not in line):
+                        # Clean up the title
+                        title = line.split('(')[0].strip()  # Remove anything in parentheses
+                        if title and len(title) > 2:
+                            movies.append(title)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_movies = []
+        for movie in movies:
+            if movie not in seen:
+                seen.add(movie)
+                unique_movies.append(movie)
+        
+        return unique_movies[:15]  # Return up to 15 movies
     except Exception as e:
         print(f"Error scraping FirstShowing: {e}")
         return []
