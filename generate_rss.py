@@ -162,8 +162,8 @@ def create_movie_description(movie_data, release_date):
     description = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 700px; line-height: 1.6; color: #333;">
         {"<div style='margin-bottom: 20px;'><img src='" + poster_url + "' alt='Movie Poster' style='max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);' /></div>" if poster_url else ""}
-        {f"<div style='margin-bottom: 20px;'>{badges_html}</div>" if badges_html else ""}
-        <div style="margin-top: 16px; font-size: 15px; line-height: 1.7;">
+        {f"<div style='margin-bottom: 24px;'>{badges_html}</div>" if badges_html else ""}
+        <div style="margin-top: 24px; font-size: 15px; line-height: 1.7;">
             {overview}
         </div>
     </div>
