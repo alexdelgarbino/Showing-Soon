@@ -125,32 +125,34 @@ def create_movie_description(movie_data):
     poster_url = f"{TMDB_IMAGE_BASE}{poster}" if poster else ""
     
     overview = html.escape(movie_data.get('overview', 'No synopsis available.'))
-    runtime = format_runtime(movie_data.get('runtime'))
+    runtime_minutes = movie_data.get('runtime')
+    runtime = format_runtime(runtime_minutes) if runtime_minutes else None
     
     # Get certification (rating like PG-13, R, etc.)
-    certification = "Not Rated"
+    certification = None
     release_dates = movie_data.get('release_dates', {}).get('results', [])
     for country in release_dates:
         if country.get('iso_3166_1') == 'US':
             certs = country.get('release_dates', [])
-            if certs:
-                certification = certs[0].get('certification', 'Not Rated')
+            if certs and certs[0].get('certification'):
+                certification = certs[0].get('certification')
                 break
     
     genres = ', '.join([g['name'] for g in movie_data.get('genres', [])])
     
+    # Build badges HTML only for known values
+    badges_html = ""
+    if certification:
+        badges_html += f"<div style='display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px; font-size: 14px;'><strong>Rating:</strong> {certification}</div>"
+    if runtime:
+        badges_html += f"<div style='display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px; font-size: 14px;'><strong>Runtime:</strong> {runtime}</div>"
+    if genres:
+        badges_html += f"<div style='display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-bottom: 8px; font-size: 14px;'><strong>Genre:</strong> {genres}</div>"
+    
     description = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 700px; line-height: 1.6; color: #333;">
         {"<div style='margin-bottom: 20px;'><img src='" + poster_url + "' alt='Movie Poster' style='max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);' /></div>" if poster_url else ""}
-        <div style="margin-bottom: 20px;">
-            <div style="display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px; font-size: 14px;">
-                <strong>Rating:</strong> {certification}
-            </div>
-            <div style="display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px; font-size: 14px;">
-                <strong>Runtime:</strong> {runtime}
-            </div>
-            {f"<div style='display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 4px; margin-bottom: 8px; font-size: 14px;'><strong>Genre:</strong> {genres}</div>" if genres else ""}
-        </div>
+        {f"<div style='margin-bottom: 20px;'>{badges_html}</div>" if badges_html else ""}
         <div style="margin-top: 16px; font-size: 15px; line-height: 1.7;">
             {overview}
         </div>
