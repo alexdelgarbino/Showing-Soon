@@ -96,15 +96,12 @@ def scrape_firstshowing_schedule(year, target_date):
                         continue
                     
                     # Keep the full title with tags like (Expands), (+ IMAX), etc.
-                    # But remove platform-only tags like (Theaters), (Netflix), etc.
+                    # But remove (Theaters) suffix only
                     title = line
                     
-                    # Remove platform-only suffixes but keep descriptive ones
-                    for suffix in [' (Theaters)', ' (Netflix)', ' (HBO Max)', 
-                                   ' (Prime Video)', ' (Hulu)', ' (VOD)', ' (Theaters + VOD)', 
-                                   ' (Re-Release)', ' (Fathom)']:
-                        if suffix in title:
-                            title = title.replace(suffix, '')
+                    # Remove only (Theaters) suffix
+                    if ' (Theaters)' in title:
+                        title = title.replace(' (Theaters)', '')
                     
                     # Only add if it looks like a valid movie title
                     if title and len(title) > 1 and not title[0].isdigit():
