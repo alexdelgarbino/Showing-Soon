@@ -44,9 +44,9 @@ def search_movie_tmdb(title, year):
         
         if results:
             movie_id = results[0]['id']
-            # Get full movie details
+            # Get full movie details including external IDs
             details_url = f'{TMDB_BASE_URL}/movie/{movie_id}'
-            params = {'api_key': TMDB_API_KEY}
+            params = {'api_key': TMDB_API_KEY, 'append_to_response': 'external_ids'}
             response = requests.get(details_url, params=params, timeout=10)
             response.raise_for_status()
             return response.json()
@@ -215,7 +215,14 @@ def generate_rss():
                 display_title = movie_title
             
             SubElement(item, 'title').text = display_title
-            SubElement(item, 'link').text = f"https://www.themoviedb.org/movie/{movie_data['id']}"
+            
+            # Use IMDb link if available, otherwise fall back to TMDB
+            imdb_id = movie_data.get('external_ids', {}).get('imdb_id')
+            if imdb_id:
+                SubElement(item, 'link').text = f"https://www.imdb.com/title/{imdb_id}/"
+            else:
+                SubElement(item, 'link').text = f"https://www.themoviedb.org/movie/{movie_data['id']}"
+            
             SubElement(item, 'description').text = create_movie_description(movie_data, date_str)
             
             # Assign decreasing timestamps: first movie gets newest time, last gets oldest
